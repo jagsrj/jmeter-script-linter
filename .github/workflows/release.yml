@@ -1,0 +1,50 @@
+name: release
+
+# Push a tag like v1.0.0 to build the jar and publish a GitHub release with it attached.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Check tag matches pom version
+        run: |
+          POM_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
+          if [ "v$POM_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pom version $POM_VERSION"; exit 1
+          fi
+
+      - name: Build and self-test
+        run: mvn -B -ntp verify
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          JMX Lint is a JMeter plugin and command-line tool that reviews .jmx scripts.
+
+          **Install in JMeter 5.x:** copy the jar to `JMETER_HOME/lib/ext`, restart JMeter, then use **Tools > Lint Test Plan (JMX Lint)**.
+
+          **CLI / CI:** `java -jar jmx-lint-<version>.jar --rules jmx-lint.properties scripts/`
+
+          - 45 rules: naming conventions, memory and resource risks, best practices, hard-coded secrets
+          - Rules configurable in a .properties file; suppress per element with `lint-ignore: RULE_ID` in Comments
+          - Reports: text, JSON, JUnit XML, Markdown
+          - Runs on Java 8+
+          EOF
+          gh release create "$GITHUB_REF_NAME" target/jmx-lint-*.jar \
+            --title "JMX Lint $GITHUB_REF_NAME" --notes-file notes.md
