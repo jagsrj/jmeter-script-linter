@@ -1,7 +1,9 @@
 name: release
 
-# Push a tag like v1.0.0 to build the jar and publish a GitHub release with it attached.
+# Publishes a GitHub release (tag v<pom version>) with the plugin jar attached.
+# Run it from the Actions tab ("Run workflow"), or push a tag like v1.0.0.
 on:
+  workflow_dispatch:
   push:
     tags: ['v*']
 
@@ -20,12 +22,13 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Check tag matches pom version
+      - name: Work out the release tag
         run: |
           POM_VERSION=$(mvn -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
-          if [ "v$POM_VERSION" != "$GITHUB_REF_NAME" ]; then
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$POM_VERSION" != "$GITHUB_REF_NAME" ]; then
             echo "Tag $GITHUB_REF_NAME does not match pom version $POM_VERSION"; exit 1
           fi
+          echo "TAG=v$POM_VERSION" >> "$GITHUB_ENV"
 
       - name: Build and self-test
         run: mvn -B -ntp verify
@@ -46,5 +49,6 @@ jobs:
           - Reports: text, JSON, JUnit XML, Markdown
           - Runs on Java 8+
           EOF
-          gh release create "$GITHUB_REF_NAME" target/jmx-lint-*.jar \
-            --title "JMX Lint $GITHUB_REF_NAME" --notes-file notes.md
+          sed -i 's/^          //' notes.md
+          gh release create "$TAG" target/jmx-lint-*.jar --target "$GITHUB_SHA" \
+            --title "JMX Lint $TAG" --notes-file notes.md
