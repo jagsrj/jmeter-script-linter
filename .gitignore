@@ -1,0 +1,8 @@
+target/
+*.class
+*.iml
+.idea/
+.vscode/
+.DS_Store
+jmeter.log
+*.jtl

@@ -1,0 +1,39 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: ['11', '17', '21']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Maven build (compiles against real ApacheJMeter_core, runs self tests)
+        run: mvn -B -ntp verify
+
+      - name: Offline build script
+        run: ./build.sh
+
+      - name: Lint the sample plans (demo)
+        run: |
+          java -jar target/jmx-lint-*.jar src/test/resources/good-plan.jmx
+          java -jar target/jmx-lint-*.jar --fail-on NONE -f markdown src/test/resources/bad-plan.jmx >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.java == '17'
+        with:
+          name: jmx-lint-jar
+          path: target/jmx-lint-*.jar
